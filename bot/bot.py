@@ -4,10 +4,10 @@ import aiohttp
 
 # ⚙ Настройки
 BOT_TOKEN = "8656129697:AAFzWfjA7YBsJoV3rdr99pWrBmpYFjbAIUM"  # токен от BotFather
-CRYPTO_TOKEN = "UQD4kfKvot7S7a-k0D7YLsRQquU5pOQ6Lj7vjNh9uzn7Q-ep"  # твой CryptoBot API
-ADMIN_ID = 6498779131  # твой Telegram ID для уведомлений
+CRYPTO_TOKEN = "UQD4kfKvot7S7a-k0D7YLsRQquU5pOQ6Lj7vjNh9uzn7Q-ep"  # CryptoBot API
+ADMIN_ID = 6498779131  # твой Telegram ID
 
-bot = Bot(token=8656129697:AAFzWfjA7YBsJoV3rdr99pWrBmpYFjbAIUM)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 # 📌 Главное меню
@@ -47,7 +47,7 @@ async def services(callback: types.CallbackQuery):
         "📊 Презентации"
     )
 
-# 💰 Цены + кнопка оплаты
+# 💰 Цены
 @dp.callback_query_handler(lambda c: c.data == "prices")
 async def prices(callback: types.CallbackQuery):
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -66,12 +66,12 @@ async def prices(callback: types.CallbackQuery):
 async def order(callback: types.CallbackQuery):
     await callback.message.answer("📩 Напиши сюда свой заказ и я свяжусь с тобой!")
 
-# 📝 Кнопка оставить отзыв
+# 📝 Оставить отзыв
 @dp.callback_query_handler(lambda c: c.data == "review")
 async def review(callback: types.CallbackQuery):
     await callback.message.answer("📝 Пожалуйста, напишите свой отзыв. Я сохраню его и отправлю мне.")
 
-# 🔥 Создание счёта через CryptoBot
+# 🔥 Создание счёта через CryptoBot API
 async def create_invoice(amount, currency="USDT"):
     async with aiohttp.ClientSession() as session:
         headers = {"Crypto-Pay-API-Token": CRYPTO_TOKEN}
@@ -83,36 +83,38 @@ async def create_invoice(amount, currency="USDT"):
         ) as resp:
             return await resp.json()
 
-# 💰 Покупка сайта
+# 💰 Купить сайт
 @dp.callback_query_handler(lambda c: c.data == "buy_site")
 async def buy_site(callback: types.CallbackQuery):
-    invoice = await create_invoice("50")  # 50$ за сайт
+    invoice = await create_invoice("50")
     pay_url = invoice["result"]["pay_url"]
     invoice_id = invoice["result"]["invoice_id"]
 
-    kb = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="💳 Оплатить", url=pay_url)]
-    ])
+    kb = types.InlineKeyboardMarkup().add(
+        types.InlineKeyboardButton(text="💳 Оплатить", url=pay_url)
+    )
+
     await callback.message.answer("Оплати по кнопке 👇", reply_markup=kb)
     asyncio.create_task(check_payment(callback.message.chat.id, invoice_id, "Сайт", "50$"))
 
-# 🤖 Покупка Telegram бота
+# 🤖 Купить бота
 @dp.callback_query_handler(lambda c: c.data == "buy_bot")
 async def buy_bot(callback: types.CallbackQuery):
-    invoice = await create_invoice("12.7", "USDT")  # ~12,7$ за 1000 сом
+    invoice = await create_invoice("12.7")
     pay_url = invoice["result"]["pay_url"]
     invoice_id = invoice["result"]["invoice_id"]
 
-    kb = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="💳 Оплатить", url=pay_url)]
-    ])
-    await callback.message.answer("Оплати по кнопке 👇", reply_markup=kb)
-    asyncio.create_task(check_payment(callback.message.chat.id, invoice_id, "Telegram бот", "1000 сом (~$12,7)"))
+    kb = types.InlineKeyboardMarkup().add(
+        types.InlineKeyboardButton(text="💳 Оплатить", url=pay_url)
+    )
 
-# 🔁 Авто проверка оплаты + уведомление тебе
+    await callback.message.answer("Оплати по кнопке 👇", reply_markup=kb)
+    asyncio.create_task(check_payment(callback.message.chat.id, invoice_id, "Telegram бот", "1000 сом"))
+
+# 🔁 Проверка оплаты
 async def check_payment(chat_id, invoice_id, service_name, price):
     while True:
-        await asyncio.sleep(10)  # проверяем каждые 10 секунд
+        await asyncio.sleep(10)
         async with aiohttp.ClientSession() as session:
             headers = {"Crypto-Pay-API-Token": CRYPTO_TOKEN}
             async with session.get(
@@ -123,16 +125,14 @@ async def check_payment(chat_id, invoice_id, service_name, price):
                 status = result["result"]["items"][0]["status"]
 
         if status == "paid":
-            # уведомление клиенту
             await bot.send_message(chat_id, f"✅ Оплата получена! Услуга: {service_name}. Напишите детали заказа 👇")
-            # уведомление тебе
             await bot.send_message(
                 ADMIN_ID,
                 f"💰 Новая оплата!\n\n👤 Клиент: {chat_id}\n💵 Сумма: {price}\n🛒 Услуга: {service_name}"
             )
             break
 
-# 🤖 Автоответчик для любых сообщений
+# Автоответчик
 @dp.message_handler()
 async def auto_reply(msg: types.Message):
     text = msg.text.lower()
@@ -141,34 +141,32 @@ async def auto_reply(msg: types.Message):
         kb = types.InlineKeyboardMarkup().add(
             types.InlineKeyboardButton("💳 Оплатить сайт", callback_data="buy_site")
         )
-        await msg.answer("🌐 Отлично! Вы хотите сайт? Стоимость 50$.\nНажмите кнопку для оплаты 👇", reply_markup=kb)
+        await msg.answer("🌐 Хотите сайт? Стоимость 50$.\nНажмите кнопку 👇", reply_markup=kb)
 
     elif "бот" in text:
         kb = types.InlineKeyboardMarkup().add(
             types.InlineKeyboardButton("💳 Оплатить бота", callback_data="buy_bot")
         )
-        await msg.answer("🤖 Отлично! Telegram бот стоит 1000 сом (~$12,7).\nНажмите кнопку для оплаты 👇", reply_markup=kb)
+        await msg.answer("🤖 Telegram бот стоит 1000 сом (~$12,7).\nНажмите кнопку 👇", reply_markup=kb)
 
     elif "презентация" in text:
-        await msg.answer("📊 Презентации делаем индивидуально. Напишите детали заказа!")
+        await msg.answer("📊 Напишите детали презентации!")
 
     else:
-        await msg.answer("Привет! Я могу помочь создать сайт, Telegram бота или презентацию.\nВыберите услугу ниже 👇", reply_markup=main_menu())
+        await msg.answer("🤖 Выберите услугу ниже 👇", reply_markup=main_menu())
 
-# 📝 Обработка текста отзывов
+# Обработка текстовых отзывов
 @dp.message_handler(lambda msg: msg.reply_to_message and "Пожалуйста, напишите свой отзыв" in msg.reply_to_message.text)
 async def handle_review(msg: types.Message):
     review_text = msg.text.strip()
     if review_text:
-        # уведомление тебе в Telegram
         await bot.send_message(
             ADMIN_ID,
-            f"📝 Новый отзыв от пользователя {msg.from_user.full_name} (@{msg.from_user.username}):\n\n{review_text}"
+            f"📝 Новый отзыв от {msg.from_user.full_name} (@{msg.from_user.username}):\n\n{review_text}"
         )
-        # ответ пользователю
-        await msg.answer("🙏 Спасибо за ваш отзыв!")
+        await msg.answer("🙏 Спасибо за отзыв!")
 
-# ▶️ Запуск бота
+# ▶️ Запуск
 async def main():
     await dp.start_polling()
 
